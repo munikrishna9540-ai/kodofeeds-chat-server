@@ -1,12 +1,32 @@
-// server.js — Express proxy to OpenAI Responses API + built-in /test page
-// Node 18+ (global fetch available)
+// server.js — Express proxy to OpenAI Responses API + /test + /widget.js + /widget-demo
+// Requires: Node 18+ (global fetch), package.json { "type": "module" }
 
 import express from 'express';
 import cors from 'cors';
 
+// ---------- Plain-text filter (removes emojis/markdown/html) ----------
+function toPlainText(s = '') {
+  return String(s)
+    .replace(/```[\s\S]*?```/g, '')                    // fenced code
+    .replace(/`([^`]+)`/g, '$1')                       // inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')              // images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')           // links -> text
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')                // bold
+    .replace(/(\*|_)(.*?)\1/g, '$2')                   // italics
+    .replace(/^#{1,6}\s*/gm, '')                       // headings
+    .replace(/^\s*[-*•●]\s+/gm, '- ')                  // bullets normalize
+    .replace(/\p{Extended_Pictographic}/gu, '')        // emojis/symbols
+    .replace(/<[^>]+>/g, '')                           // HTML tags
+    .replace(/[“”]/g, '"').replace(/[‘’]/g, "'")       // smart quotes
+    .replace(/[^\S\r\n]+/g, ' ')                       // collapse spaces
+    .replace(/\n{3,}/g, '\n\n')                        // collapse blank lines
+    .trim();
+}
+
+// ---------- App ----------
 const app = express();
 app.use(express.json());
-app.use(cors()); // keep simple for now
+app.use(cors()); // simple; can restrict later
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -14,7 +34,7 @@ const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 // Health
 app.get('/', (_req, res) => res.send('Kodofeeds chat server OK'));
 
-// Built-in test page (same origin, no CORS issues)
+// Test page (same-origin form)
 app.get('/test', (_req, res) => {
   res.type('html').send(`<!doctype html>
 <html>
@@ -25,11 +45,11 @@ app.get('/test', (_req, res) => {
   <button id="send">Send</button>
   <pre id="out" style="white-space:pre-wrap;"></pre>
   <script>
-    const ENDPOINT = '/chat'; // same host
+    const ENDPOINT = '/chat';
     document.getElementById('send').onclick = async () => {
       const msg = document.getElementById('msg').value.trim();
       if (!msg) return;
-      document.getElementById('out').textContent = '…asking the assistant…';
+      document.getElementById('out').textContent = '...asking the assistant...';
       try {
         const r = await fetch(ENDPOINT, {
           method: 'POST',
@@ -37,11 +57,9 @@ app.get('/test', (_req, res) => {
           body: JSON.stringify({ message: msg })
         });
         const j = await r.json();
-        document.getElementById('out').textContent =
-          j.assistant_message || JSON.stringify(j, null, 2);
+        document.getElementById('out').textContent = j.assistant_message || JSON.stringify(j, null, 2);
       } catch (e) {
-        document.getElementById('out').textContent =
-          'Request failed. Open the Console for details.';
+        document.getElementById('out').textContent = 'Request failed. Open Console for details.';
         console.error(e);
       }
     };
@@ -50,88 +68,10 @@ app.get('/test', (_req, res) => {
 </html>`);
 });
 
-// Chat proxy
-app.post('/chat', async (req, res) => {
-  try {
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: 'Missing OPENAI_API_KEY env var' });
-    }
-
-    const { message, previous_response_id } = req.body || {};
-    if (!message || message.length > 4000) {
-      return res.status(400).json({ error: 'Empty or too long message' });
-    }
-
-    const instructions = `
-const instructions = `
-You are the Kodofeeds website assistant.
-
-LANGUAGE:
-- Detect the user's language automatically.
-- If the user writes in Kannada, reply in Kannada.
-- If the user writes in Telugu, reply in Telugu.
-- If mixed or unclear, default to English.
-
-STYLE:
-- PLAIN TEXT ONLY: no emojis, no decorative symbols, no Markdown/bold/italics.
-- Use short sentences and simple numbered or dashed lists.
-- Be concise, friendly, and action-focused.
-
-SAFETY:
-- Never reveal API keys or internal tokens.
-`.trim();
-
-
-    const payload = {
-      model: MODEL,
-      instructions,
-      input: message,
-      temperature: 0.7,
-      ...(previous_response_id ? { previous_response_id } : {})
-    };
-
-    const r = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const json = await r.json();
-    if (!r.ok) return res.status(r.status).json(json);
-
-    let text = '';
-    if (Array.isArray(json.output)) {
-      for (const out of json.output) {
-        if (Array.isArray(out.content)) {
-          for (const part of out.content) {
-            if (part.type === 'output_text' && part.text) text += part.text;
-          }
-        }
-      }
-    }
-
-    return res.json({
-      ok: true,
-      response_id: json.id,
-      assistant_message: text || '[No text]'
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-const port = process.env.PORT || 3000; // Lightweight chat widget served from this server
+// Embeddable widget script
 app.get('/widget.js', (_req, res) => {
   res.type('application/javascript').send(`(function(){
-    // Always point to this server's /chat, no matter where the script is embedded
-    var endpoint = (function(){
-      try { return new URL('./chat', document.currentScript.src).href; }
-      catch(e){ return 'https://kodofeeds-chat-server.onrender.com/chat'; }
-    })();
+    var endpoint = (function(){ try { return new URL('./chat', document.currentScript.src).href; } catch(e){ return '/chat'; } })();
 
     var css = ''
       + '.kf-chat-bubble{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;'
@@ -197,7 +137,8 @@ app.get('/widget.js', (_req, res) => {
     input.addEventListener('keydown',function(e){ if(e.key==='Enter') talk(); });
   })();`);
 });
-// Demo page that embeds the widget from this server
+
+// Demo page that embeds the widget
 app.get('/widget-demo', (_req, res) => {
   res.type('html').send(`<!doctype html>
 <html>
@@ -205,11 +146,81 @@ app.get('/widget-demo', (_req, res) => {
 <body>
   <h3 style="font-family:system-ui;margin:16px">Kodofeeds Chat — Widget Demo</h3>
   <p style="font-family:system-ui;margin:16px">Click the bubble at bottom-right and ask a question.</p>
-
-  <!-- One-line embed that you can later use on any site -->
   <script src="/widget.js" defer></script>
 </body>
 </html>`);
 });
 
+// Chat proxy
+app.post('/chat', async (req, res) => {
+  try {
+    if (!OPENAI_API_KEY) return res.status(500).json({ error: 'Missing OPENAI_API_KEY env var' });
+
+    const { message, previous_response_id } = req.body || {};
+    if (!message || message.length > 4000) {
+      return res.status(400).json({ error: 'Empty or too long message' });
+    }
+
+    const instructions = `
+You are the Kodofeeds website assistant.
+
+LANGUAGE:
+- Detect the user's language automatically.
+- If the user writes in Kannada, reply in Kannada.
+- If the user writes in Telugu, reply in Telugu.
+- If mixed or unclear, default to English.
+
+STYLE:
+- PLAIN TEXT ONLY: no emojis, no decorative symbols, no Markdown/bold/italics.
+- Use short sentences and simple numbered or dashed lists.
+- Be concise, friendly, and action-focused.
+
+SAFETY:
+- Never reveal API keys or internal tokens.
+`.trim();
+
+    const payload = {
+      model: MODEL,
+      instructions,
+      input: message,
+      temperature: 0.7,
+      ...(previous_response_id ? { previous_response_id } : {})
+    };
+
+    const r = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const json = await r.json();
+    if (!r.ok) return res.status(r.status).json(json);
+
+    // Collect text parts
+    let text = '';
+    if (Array.isArray(json.output)) {
+      for (const out of json.output) {
+        if (Array.isArray(out.content)) {
+          for (const part of out.content) {
+            if (part.type === 'output_text' && part.text) text += part.text;
+          }
+        }
+      }
+    }
+
+    // Enforce plain text
+    text = toPlainText(text);
+
+    return res.json({ ok: true, response_id: json.id, assistant_message: text || '[No text]' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Start server
+const port = process.env.PORT || 3000;
 app.listen(port, () => console.log('Kodofeeds chat server on :' + port));
