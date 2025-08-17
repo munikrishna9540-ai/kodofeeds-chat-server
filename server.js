@@ -184,5 +184,19 @@ app.get('/widget.js', (_req, res) => {
     input.addEventListener('keydown',function(e){ if(e.key==='Enter') talk(); });
   })();`);
 });
+// Demo page that embeds the widget from this server
+app.get('/widget-demo', (_req, res) => {
+  res.type('html').send(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Kodofeeds Widget Demo</title></head>
+<body>
+  <h3 style="font-family:system-ui;margin:16px">Kodofeeds Chat — Widget Demo</h3>
+  <p style="font-family:system-ui;margin:16px">Click the bubble at bottom-right and ask a question.</p>
+
+  <!-- One-line embed that you can later use on any site -->
+  <script src="/widget.js" defer></script>
+</body>
+</html>`);
+});
 
 app.listen(port, () => console.log('Kodofeeds chat server on :' + port));
