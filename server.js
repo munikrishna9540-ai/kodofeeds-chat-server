@@ -70,8 +70,74 @@ app.get('/test', (_req, res) => {
 
 // Embeddable widget script
 app.get('/widget.js', (_req, res) => {
-  res.type('application/javascript').send(`(function(){
-    var endpoint = (function(){ try { return new URL('./chat', document.currentScript.src).href; } catch(e){ return '/chat'; } })();
+  // Demo page that embeds the widget from this server (styled)
+app.get('/widget-demo', (_req, res) => {
+  res.type('html').send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Kodofeeds — Widget Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{
+      --bg1:#f8fafc; --bg2:#eef2ff; --ink:#0f172a; --muted:#475569; --card:#ffffff; --line:#e5e7eb;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);
+         background:linear-gradient(180deg,var(--bg1),var(--bg2));min-height:100vh;}
+    header{padding:16px 24px;border-bottom:1px solid var(--line);backdrop-filter:saturate(140%) blur(4px)}
+    .brand{font-weight:800;letter-spacing:.3px}
+    .wrap{max-width:1000px;margin:0 auto;padding:32px 20px 80px}
+    .hero{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:28px 24px;
+          box-shadow:0 8px 24px rgba(15,23,42,.06)}
+    .hero h1{margin:0 0 8px;font-size:28px}
+    .hero p{margin:0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:22px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;min-height:110px;
+          box-shadow:0 6px 18px rgba(15,23,42,.05)}
+    .card h3{margin:0 0 6px;font-size:16px}
+    .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.4}
+    footer{color:var(--muted);text-align:center;margin-top:28px;font-size:13px}
+    /* space for the bubble */
+    .spacer{height:120px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Kodofeeds</div>
+  </header>
+
+  <div class="wrap">
+    <section class="hero">
+      <h1>Kodofeeds Assistant (Live Demo)</h1>
+      <p>Click the black bubble at the bottom-right and ask anything in English, Kannada, or Telugu.</p>
+    </section>
+
+    <div class="grid">
+      <div class="card">
+        <h3>What this shows</h3>
+        <p>Embedded chat widget talking to our Render backend. Replies are plain text only.</p>
+      </div>
+      <div class="card">
+        <h3>Security</h3>
+        <p>Your OpenAI key stays on the server. The browser calls our /chat endpoint.</p>
+      </div>
+      <div class="card">
+        <h3>How to use later</h3>
+        <p>Add one line to any site: &lt;script src="https://kodofeeds-chat-server.onrender.com/widget.js" defer&gt;&lt;/script&gt;.</p>
+      </div>
+    </div>
+
+    <footer>Tip: try Kannada or Telugu questions to see auto language detection.</footer>
+    <div class="spacer"></div>
+  </div>
+
+  <!-- The chat widget -->
+  <script src="/widget.js" defer></script>
+</body>
+</html>`);
+});
+
 
     var css = ''
       + '.kf-chat-bubble{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;'
