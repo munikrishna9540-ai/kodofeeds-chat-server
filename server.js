@@ -73,7 +73,11 @@ You are the Kodofeeds website assistant.
       ...(previous_response_id ? { previous_response_id } : {})
     };
 
-    const r = await fetch('https://api.openai.com/v1/responses', {
+    const r = await headers: {
+  'Authorization': `Bearer ${OPENAI_API_KEY}`,
+  'Content-Type': 'application/json'
+},
+, {
       method: 'POST',
       headers: {
         'Authorization': \`Bearer \${OPENAI_API_KEY}\`,
