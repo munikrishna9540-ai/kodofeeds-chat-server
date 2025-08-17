@@ -3,24 +3,6 @@
 
 import express from 'express';
 import cors from 'cors';
-// Convert any Markdown/HTML/emoji to plain text
-function toPlainText(s = '') {
-  return String(s)
-    .replace(/```[\s\S]*?```/g, '')                    // fenced code blocks
-    .replace(/`([^`]+)`/g, '$1')                       // inline code
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')              // images
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')           // links -> text
-    .replace(/(\*\*|__)(.*?)\1/g, '$2')                // bold
-    .replace(/(\*|_)(.*?)\1/g, '$2')                   // italics
-    .replace(/^#{1,6}\s*/gm, '')                       // headings
-    .replace(/^\s*[-*•●]\s+/gm, '- ')                  // bullets normalize
-    .replace(/\p{Extended_Pictographic}/gu, '')        // emojis/symbols
-    .replace(/<[^>]+>/g, '')                           // HTML tags
-    .replace(/[“”]/g, '"').replace(/[‘’]/g, "'")       // smart quotes
-    .replace(/[^\S\r\n]+/g, ' ')                       // collapse spaces
-    .replace(/\n{3,}/g, '\n\n')                        // collapse blank lines
-    .trim();
-}
 
 const app = express();
 app.use(express.json());
