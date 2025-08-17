@@ -1,4 +1,4 @@
-// server.js — minimal Express proxy to OpenAI Responses API
+// server.js — Express proxy to OpenAI Responses API + built-in /test page
 // Node 18+ (global fetch available)
 
 import express from 'express';
@@ -6,13 +6,51 @@ import cors from 'cors';
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // we'll lock this down later
+app.use(cors()); // keep simple for now
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
+// Health
 app.get('/', (_req, res) => res.send('Kodofeeds chat server OK'));
 
+// Built-in test page (same origin, no CORS issues)
+app.get('/test', (_req, res) => {
+  res.type('html').send(`<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Kodofeeds Chat Test</title></head>
+<body>
+  <h3>Kodofeeds Chat (Render backend)</h3>
+  <input id="msg" placeholder="Type a question" style="width:60%">
+  <button id="send">Send</button>
+  <pre id="out" style="white-space:pre-wrap;"></pre>
+  <script>
+    const ENDPOINT = '/chat'; // same host
+    document.getElementById('send').onclick = async () => {
+      const msg = document.getElementById('msg').value.trim();
+      if (!msg) return;
+      document.getElementById('out').textContent = '…asking the assistant…';
+      try {
+        const r = await fetch(ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        const j = await r.json();
+        document.getElementById('out').textContent =
+          j.assistant_message || JSON.stringify(j, null, 2);
+      } catch (e) {
+        document.getElementById('out').textContent =
+          'Request failed. Open the Console for details.';
+        console.error(e);
+      }
+    };
+  </script>
+</body>
+</html>`);
+});
+
+// Chat proxy
 app.post('/chat', async (req, res) => {
   try {
     const { message, previous_response_id } = req.body || {};
@@ -21,11 +59,11 @@ app.post('/chat', async (req, res) => {
     }
 
     const instructions = `
-    You are the Kodofeeds website assistant.
-    - Be concise, friendly, action-focused.
-    - Give numbered steps for how-tos; minimal code when helpful.
-    - Never reveal API keys or internal tokens.
-    `.trim();
+You are the Kodofeeds website assistant.
+- Be concise, friendly, action-focused.
+- Give numbered steps for how-tos; minimal code when helpful.
+- Never reveal API keys or internal tokens.
+`.trim();
 
     const payload = {
       model: MODEL,
@@ -38,7 +76,7 @@ app.post('/chat', async (req, res) => {
     const r = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': \`Bearer \${OPENAI_API_KEY}\`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(payload),
